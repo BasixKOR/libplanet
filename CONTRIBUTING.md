@@ -19,7 +19,7 @@ for purposes in the *Libplanet* category:
     Ask questions to *hack* Libplanet and to make a patch for it.  People here
     usually speak in Korean, but feel free to speak in English.
 
-[Discord server]: https://planetarium.dev/discord
+[Discord server]: https://link.planetarium.dev/libplanet-contributing--pl-dev-discord
 
 
 Prerequisites
@@ -82,19 +82,43 @@ Projects
 --------
 
 The [planetarium/libplanet](https://github.com/planetarium/libplanet) repository
-on GitHub consists of several projects:
+on GitHub consists of several projects.  There are two types of projects:
+
+ -  .NET projects under the umbrella of *Libplanet.sln*
+ -  TypeScript/JavaScript project under the [Yarn 3 workspace]
+
+[Yarn 3 workspace]: https://yarnpkg.com/features/workspaces
+
+
+### .NET projects
 
  -  *Libplanet*: The main project, which contains the most of implementation
     code.  It is distributed as a NuGet package with the same name:
     *[Libplanet][NuGet package]*.
 
+ -  *Libplanet.Common*: The common utilities and extensions for *Libplanet*.
+    This is distributed as a distinct NuGet package:
+    *[Libplanet.Common][NuGet package]*.
+
+ -  *Libplanet.Crypto*: The cryptography library for *Libplanet*.
+    This is distributed as a distinct NuGet package:
+    *[Libplanet.Crypto][NuGet package]*.
+
+ -  *Libplanet.Types*: The common types for *Libplanet*.
+    This is distributed as a distinct NuGet package:
+    *[Libplanet.Types][NuGet package]*.
+
+ -  *Libplanet.Store*: The store related functionalities for *Libplanet*.
+    This is distributed as a distinct NuGet package:
+    *[Libplanet.Store][NuGet package]*.
+
+ -  *Libplanet.Action*: The action evaluation layer for *Libplanet*.
+    This is distributed as a distinct NuGet package:
+    *[Libplanet.Action][NuGet package]*.
+
  -  *Libplanet.Net*: The peer-to-peer networking layer built on top of
     *Libplanet*.  This is distributed as a distinct NuGet package:
     *[Libplanet.Net]*.
-
- -  *Libplanet.Node*: User-friendly façade API for building your own
-     peer-to-peer network.  This is distributed as a distinct NuGet package:
-    *[Libplanet.Node]*.
 
  -  *Libplanet.Stun*: The project dedicated to implement [TURN & STUN].
     This is distributed as a distinct NuGet package: *[Libplanet.Stun]*.
@@ -107,6 +131,15 @@ on GitHub consists of several projects:
  -  *Libplanet.RocksDBStore*: The `IStore` implementation built on [RocksDB].
     As this depends on platform-dependent libraries (which is written in C/C++),
     this is distributed as a distinct NuGet package: *[Libplanet.RocksDBStore]*.
+
+ -  *Libplanet.Store.Remote*: The `IKeyValueStore` implementation for use with
+    *Libplanet.Store* to store data in a remote server and communicate using
+    [gRPC]. This is cannot be used standalone. Need `IKeyValueStore`
+    implementation for local storage like *[Libplanet.RocksDBStore]*.
+
+ -  *Libplanet.Mocks*: A mocking tool to be used for development when
+    designing `IAction`s and writing test codes.  This should not be
+    used or referenced in production code.
 
  -  *Libplanet.Analyzers*: Roslyn Analyzer (i.e., lint) for game programmers who
     use Libplanet.  This project is distributed as a distinct NuGet package:
@@ -127,43 +160,52 @@ on GitHub consists of several projects:
     an executable is done by a below project named
     *Libplanet.Explorer.Executable*.
 
- -  *Libplanet.Explorer.Executable*: Turns Libplanet Explorer into a single
-    executable binary so that it is easy to distribute.
+ -  *Libplanet.Explorer.Cocona*: Provides [Cocona] commands related to
+    *Libplanet.Explorer*.
+
+ -  *Libplanet.Explorer.Executable*: (**DEPRECATED**) Turns Libplanet Explorer
+    into a single executable binary so that it is easy to distribute.
 
  -  *Libplanet.Benchmarks*: Performance benchmarks.
     See the [*Benchmarks*](#benchmarks) section below.
 
- -  *Libplanet.Tests*: Unit tests of the *Libplanet* project.  See the *Tests*
+ -  *Libplanet.Tests*: Unit tests for the *Libplanet* project.  See the *Tests*
     section below.
 
- -  *Libplanet.Net.Tests*: Unit tests of the *Libplanet.Net* project.
+ -  *Libplanet.Action.Tests*: Unit tests for the *Libplanet.Action* project.
 
- -  *Libplanet.Node.Tests*: Unit tests of the *Libplanet.Node* project.
+ -  *Libplanet.Net.Tests*: Unit tests for the *Libplanet.Net* project.
 
  -  *Libplanet.Stun.Tests*: Unit tests of the *Libplanet.Stun* project.
 
- -  *Libplanet.Crypto.Secp256k1.Tests*: Unit tests of
+ -  *Libplanet.Crypto.Secp256k1.Tests*: Unit tests for
     the *Libplanet.Crypto.Secp256k1* project.
 
- -  *Libplanet.RocksDBStore.Tests*: Unit tests of the *Libplanet.RocksDBStore*
+ -  *Libplanet.RocksDBStore.Tests*: Unit tests for the *Libplanet.RocksDBStore*
     project.
 
- -  *Libplanet.Analyzers.Tests*: Unit tests of the *Libplanet.Analyzers*
+ -  *Libplanet.Store.Remote.Tests*: Unit tests for the *Libplanet.Store.Remote*
     project.
 
- -  *Libplanet.Explorer.Tests*: Unit tests of the *Libplanet.Explorer*
+ -  *Libplanet.Analyzers.Tests*: Unit tests for the *Libplanet.Analyzers*
     project.
 
- -  *Libplanet.Extensions.Cocona.Tests*: Unit tests of the
+ -  *Libplanet.Explorer.Tests*: Unit tests for the *Libplanet.Explorer*
+    project.
+
+ -  *Libplanet.Explorer.Cocona.Tests*: Unit tests for the
+    *Libplanet.Explorer.Cocona* project.
+
+ -  *Libplanet.Extensions.Cocona.Tests*: Unit tests for the
     *Libplanet.Extensions.Cocona* project.
 
 
 [NuGet package]: https://www.nuget.org/packages/Libplanet/
 [Libplanet.Net]: https://www.nuget.org/packages/Libplanet.Net/
-[Libplanet.Node]: https://www.nuget.org/packages/Libplanet.Node/
 [TURN & STUN]: https://snack.planetarium.dev/eng/2019/06/nat_traversal_2/
 [libsecp256k1]: https://github.com/bitcoin-core/secp256k1
 [RocksDB]: https://rocksdb.org/
+[gRPC]: https://grpc.io/
 [Libplanet.Stun]: https://www.nuget.org/packages/Libplanet.Stun/
 [Libplanet.Crypto.Secp256k1]: https://www.nuget.org/packages/Libplanet.Crypto.Secp256k1/
 [Libplanet.RocksDBStore]: https://www.nuget.org/packages/Libplanet.RocksDBStore/
@@ -312,7 +354,7 @@ In order to track performance improvements or regressions, we maintain a set of
 benchmarks and continuously measure them in the CI.  You can run benchmarks
 on your local environment too:
 
-    dotnet run -p Libplanet.Benchmarks -c Release -- -j short -f "*"
+    dotnet run --project tools/Libplanet.Benchmarks -c Release -- -j short -f "*"
 
 Note that there is `-j short`; without this a whole set of benchmarks takes
 quite a long time.  This will print like below:
@@ -325,7 +367,7 @@ quite a long time.  This will print like below:
 
 You can measure only part of benchmarks by `-f`/`--filter`ing them:
 
-    dotnet run -p Libplanet.Benchmarks -c Release -- -j short -f "*MineBlock*"
+    dotnet run --project tools/Libplanet.Benchmarks -c Release -- -j short-f "*MineBlock*"
 
 All benchmark code is placed under *Libplanet.Benchmarks* project.
 As our benchmarks are based on [BenchmarkDotNet], please read their official
