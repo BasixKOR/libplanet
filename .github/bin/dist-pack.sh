@@ -11,9 +11,12 @@ if ! (env | grep '^GITHUB_'); then
   exit 1
 fi
 
-version="$(cat obj/package_version.txt)"
-version_prefix="$(cat obj/version_prefix.txt)"
-package_version="$(cat obj/package_version.txt)"
+version="$(cat obj/package_version.txt)"       # e.g. 0.50.0-dev.20230221015836
+version_prefix="$(cat obj/version_prefix.txt)" # e.g. 0.50.0
+if [[ -f obj/version_suffix.txt ]]; then       # e.g. dev.20230221015836+35a2dbc
+  version_suffix="$(cat obj/version_suffix.txt)"
+fi
+repository_url="$(cat obj/repository_url.txt)"
 
 for project in "${executables[@]}"; do
   for rid in "${rids[@]}"; do
@@ -54,14 +57,19 @@ for project in "${executables[@]}"; do
 done
 
 for project in "${projects[@]}"; do
-  if [ -f obj/version_suffix.txt ]; then
-    version_suffix="$(cat obj/version_suffix.txt)"
-    dotnet_args="-p:VersionPrefix=$version_prefix" \
+  if [[ "$version_suffix" = "" ]]; then
+    dotnet_args="-p:Version=$version"
+  else
+    dotnet_args="-p:VersionPrefix=$version_prefix"
     dotnet_args="$dotnet_args --version-suffix=$version_suffix"
     dotnet_args="$dotnet_args -p:NoPackageAnalysis=true"
-  else
-    dotnet_args="-p:Version=$version"
   fi
+
+  if [[ "$repository_url" != "" ]]; then
+    dotnet_args="$dotnet_args -p:RepositoryUrl=$repository_url"
+  fi
+
+  dotnet_args="$dotnet_args -p:_IsPacking=true"
   # shellcheck disable=SC2086
   dotnet build -c "$configuration" $dotnet_args || \
     if [[ "$?" = "139" ]]; then
@@ -80,7 +88,7 @@ for project in "${projects[@]}"; do
     fi
 
   ls -al "./$project/bin/$configuration/"
-  if [ "$package_version" != "$version_prefix" ]; then
+  if [ "$version" != "$version_prefix" ]; then
     rm -f "./$project/bin/$configuration/$project.$version_prefix.nupkg"
   fi
 done
@@ -91,8 +99,16 @@ for npmpkg in "${npm_packages[@]}"; do
     jq --arg v "$version" 'del(.private) | .version = $v' package.json \
       > .package.json.tmp
     mv .package.json.tmp package.json
-    npm pack
-    mv ./*.tgz "${npmpkg//\//-}-$version.tgz"
+    popd
+  fi
+done
+
+# Loop twice to make sure that all packages are versioned
+for npmpkg in "${npm_packages[@]}"; do
+  if [[ -f "./$npmpkg/package.json" ]]; then
+    pushd "./$npmpkg/"
+    yarn
+    yarn pack --out "${npmpkg//\//-}-$version.tgz"
     popd
   fi
 done

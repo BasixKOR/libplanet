@@ -1,29 +1,23 @@
-export { type Address, encodeAddress } from "./address";
+export { type Address, encodeAddress } from "./address.js";
 export {
   type Currency,
   encodeCurrency,
   type FungibleAssetValue,
+  encodeFungibleAssetValue,
   getCurrencyHash,
   getMajorUnit,
   getMinorUnit,
   getSign,
-} from "./assets";
-export {
-  encodeMint,
-  encodeSystemAction,
-  encodeTransfer,
-  type CustomAction,
-  type Mint,
-  type SystemAction,
-  type Transfer,
-} from "./action";
+} from "./assets.js";
 export type {
   TxMetadata,
-  UnsignedTxWithSystemAction,
-  UnsignedTxWithCustomActions,
-} from "./tx";
+  UnsignedTx,
+} from "./tx/index.js";
 export {
   encodeTxMetadata,
-  encodeUnsignedTxWithSystemAction,
-  encodeUnsignedTxWithCustomActions,
-} from "./tx";
+  encodeUnsignedTx,
+} from "./tx/index.js";
+export {
+  signTx,
+  encodeSignedTx,
+} from "./tx/signed.js";

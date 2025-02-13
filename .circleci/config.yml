@@ -30,7 +30,6 @@ commands:
     - restore_cache:
         keys:
         - "v1-codecov"
-        when: always
     - run:
         name: Upload a code coverage report file to Codecov.io
         shell: bash
@@ -65,15 +64,24 @@ commands:
       collect_tests_to:
         type: string
         default: .tests.txt
+      collect_tests_filter:
+        type: string
+        default: ""
     steps:
     - checkout
     - concat_files:
-        glob: "*/*.csproj"
+        glob: "{src,test,tools,sdk/*}/*/*.csproj"
         to: .combined-package-files.txt
     - restore_cache:
         keys:
         - v1-deps-{{ arch }}-{{ checksum ".combined-package-files.txt" }}
         - v1-deps-{{ arch }}
+    - run:
+        name: Install .NET 8.0 SDK for Libplanet-SDK
+        shell: bash
+        command: |
+          curl -sSL https://dot.net/v1/dotnet-install.sh | \
+          bash /dev/stdin --channel 8.0 --install-dir /usr/share/dotnet
     - run: dotnet restore
     - save_cache:
         key: v1-deps-{{ arch }}-{{ checksum ".combined-package-files.txt" }}
@@ -89,7 +97,7 @@ commands:
              [[ -d /usr/local/share/dotnet ]]; then
             export PATH="/usr/local/share/dotnet:$PATH"
           fi
-          dotnet test --no-restore --no-build -c Release --list-tests \
+          dotnet test --no-restore --no-build -c Release --list-tests --filter "<<parameters.collect_tests_filter>>" \
           > .dotnet-list-tests.txt
           grep '    ' .dotnet-list-tests.txt \
           | sed 's/    /\n    /g' \
@@ -103,38 +111,14 @@ commands:
         root: .
         paths:
         - <<parameters.collect_tests_to>>
-        - "*/bin/"
-        - "*/obj/"
-
-  mono_build_base:
-    steps:
-    - checkout
-    - concat_files:
-        glob: "*/*.csproj"
-        to: .combined-package-files.txt
-    - restore_cache:
-        keys:
-        - v1-deps-{{ arch }}-{{ checksum ".combined-package-files.txt" }}
-        - v1-deps-{{ arch }}
-    - run: |
-        msbuild \
-          -t:Restore \
-          -p:Configuration=ReleaseMono \
-          -p:TestsTargetFramework=net47
-    - save_cache:
-        key: v1-deps-{{ arch }}-{{ checksum ".combined-package-files.txt" }}
-        paths:
-        - ~/.nuget/packages
-    - run: |
-        msbuild \
-          -p:Configuration=ReleaseMono \
-          -p:TestsTargetFramework=net47 \
-          -p:SkipSonar=true
-    - persist_to_workspace:
-        root: .
-        paths:
-        - "*/bin/"
-        - "*/obj/"
+        - "src/*/bin/"
+        - "src/*/obj/"
+        - "test/*/bin/"
+        - "test/*/obj/"
+        - "tools/*/bin/"
+        - "tools/*/obj/"
+        - "sdk/node/*/bin/"
+        - "sdk/node/*/obj/"
 
   netcore_test_base:
     parameters:
@@ -183,24 +167,14 @@ commands:
           else
             head -n $part .head_tests.txt > .current_tests.txt
           fi
-          excluded_tests=(
-          )
           cat .current_tests.txt
           first=1
           while read test; do
-            to_write=1
-            for excl in "${excluded_tests[@]}"; do
-              if [[ "$test" == "$excl"* ]]; then
-                to_write=0
-              fi
-            done
-            if [[ "$to_write" == "1" ]]; then
-              if [[ "$first" = "1" ]]; then
-                echo "FullyQualifiedName=$test"
-                first=0
-              else
-                echo "| FullyQualifiedName=$test"
-              fi
+            if [[ "$first" = "1" ]]; then
+              echo "FullyQualifiedName=$test"
+              first=0
+            else
+              echo "| FullyQualifiedName=$test"
             fi
           done < .current_tests.txt > .test-filter.txt
     - when:
@@ -218,7 +192,7 @@ commands:
               --dcDisableDefaultFilters
               --dcReportType=DetailedXML
               --dcFilters="+:Libplanet;+:Libplanet.*;-:Libplanet.Tests;-:Libplanet.*.Tests;-:Libplanet.*.UnitTests;-:Libplanet.Benchmarks;-:Libplanet.Explorer"
-            no_output_timeout: 180s
+            no_output_timeout: 360s
             environment:
               LC_ALL: "<<parameters.locale>>"
               LANG: "<<parameters.locale>>"
@@ -231,6 +205,20 @@ commands:
         condition: "<<parameters.code_coverage>>"
         steps:
         - run:
+            name: Display tests
+            command: >-
+              dotnet test
+              --no-restore
+              --no-build
+              -c Release
+              -l "junit;FailureBodyFormat=Verbose;LogFilePath=/tmp/junit/{assembly}.xml"
+              --filter "$(cat .test-filter.txt)"
+              --list-tests | grep -E "    .+"
+            environment:
+              LC_ALL: "<<parameters.locale>>"
+              LANG: "<<parameters.locale>>"
+              LANGUAGE: "<<parameters.locale>>"
+        - run:
             name: Run tests
             command: >-
               dotnet test
@@ -239,7 +227,7 @@ commands:
               -c Release
               -l "junit;FailureBodyFormat=Verbose;LogFilePath=/tmp/junit/{assembly}.xml"
               --filter "$(cat .test-filter.txt)"
-            no_output_timeout: 120s
+            no_output_timeout: 360s
             environment:
               LC_ALL: "<<parameters.locale>>"
               LANG: "<<parameters.locale>>"
@@ -262,7 +250,13 @@ commands:
       - run:
           name: Install lib6c-dev (for RocksDBSharp)
           shell: bash
-          command: apt update -y && apt install -y libc6-dev
+          command: apt update -y && apt install -y libc6-dev liblz4-dev zlib1g-dev libsnappy-dev libzstd-dev
+      - run:
+          name: Install .NET 8.0 SDK for Libplanet-SDK
+          shell: bash
+          command: |
+            curl -sSL https://dot.net/v1/dotnet-install.sh | \
+            bash /dev/stdin --channel 8.0 --install-dir /usr/share/dotnet
       - netcore_test_base:
           collect_tests_from: "<<parameters.collect_tests_from>>"
           locale: "<<parameters.locale>>"
@@ -296,19 +290,12 @@ commands:
         name: Install .NET 6.0 SDK
         shell: bash
         command: |
-          set -evx
-          echo $PATH > /dev/stderr
-          if ! command -v dotnet && [[ ! -f "$HOME/.dotnet/dotnet" ]]; then
-            curl \
-              -L \
-              -o /tmp/dotnet-install.sh \
-              https://dot.net/v1/dotnet-install.sh
-            chmod +x /tmp/dotnet-install.sh
-            /tmp/dotnet-install.sh \
-              --verbose \
-              --channel 6.0
-          fi
-          command -v dotnet
+          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 6.0
+    - run:
+        name: Install .NET 8.0 SDK for Libplanet-SDK
+        shell: bash
+        command: |
+          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0
     - save_cache:
         key: v1-macos-dotnet-sdk-6.0
         paths:
@@ -391,7 +378,6 @@ commands:
             if [[
               $project == Libplanet.Analyzers.Tests
               || $project == Libplanet.Tests
-              || $project == Libplanet.Node.Tests
             ]]
             then
               args+=("$PWD/$project/bin/Release/net47/$project.dll")
@@ -413,125 +399,126 @@ commands:
 
 jobs:
   linux-netcore-build:
+    parameters:
+      collect_tests_filter:
+        type: string
+        default: ""
     docker:
     - image: mcr.microsoft.com/dotnet/sdk:6.0
-    resource_class: xlarge
+    resource_class: large
     working_directory: /mnt/ramdisk
-    steps: [netcore_build_base]
-
-  linux-mono-build:
-    docker:
-    - image: mono:6.12
-    resource_class: xlarge
-    working_directory: /mnt/ramdisk
-    steps: [mono_build_base]
+    steps:
+    - netcore_build_base:
+        collect_tests_filter: "<<parameters.collect_tests_filter>>"
 
   linux-netcore-test-netmq:
+    parameters:
+      parallelism:
+        type: integer
+        default: 4
     docker:
     - image: mcr.microsoft.com/dotnet/sdk:6.0
     environment:
       TRANSPORT_TYPE: netmq
-    resource_class: xlarge
+    resource_class: large
     working_directory: /mnt/ramdisk
-    parallelism: 2
-    steps: [linux_netcore_test_base]
+    parallelism: <<parameters.parallelism>>
+    steps:
+    - linux_netcore_test_base:
+        code_coverage: false
 
   linux-netcore-test-ar-SA:
     docker:
     - image: mcr.microsoft.com/dotnet/sdk:6.0
-    resource_class: xlarge
+    resource_class: large
     working_directory: /mnt/ramdisk
-    parallelism: 2
+    parallelism: 4
     steps:
     - linux_netcore_test_base:
         locale: ar_SA.UTF-8
+        code_coverage: false
 
   linux-netcore-test-fr-FR:
     docker:
     - image: mcr.microsoft.com/dotnet/sdk:6.0
-    resource_class: xlarge
+    resource_class: large
     working_directory: /mnt/ramdisk
-    parallelism: 2
+    parallelism: 4
     steps:
     - linux_netcore_test_base:
         locale: fr_FR.UTF-8
+        code_coverage: false
 
   macos-netcore-test:
+    parameters:
+      parallelism:
+        type: integer
+        default: 4
     macos:
-      xcode: 13.2.1
-    resource_class: macos.x86.medium.gen2
-    parallelism: 4
+      xcode: 14.3.1
+    resource_class: macos.m1.medium.gen1
+    parallelism: <<parameters.parallelism>>
     steps:
     - macos_netcore_test_base: { code_coverage: false }
 
   windows-netcore-test:
+    parameters:
+      parallelism:
+        type: integer
+        default: 6
     executor:
       name: win/server-2022
-      size: xlarge
-    parallelism: 3
-    steps: [netcore_test_base]
-
-  linux-unity-test:
-    docker:
-    - image: mono:6.12
-    environment:
-      XUNIT_UNITY_RUNNER: 0.5.0
-    resource_class: xlarge
-    working_directory: /mnt/ramdisk
-    parallelism: 4
+      size: large
+    parallelism: <<parameters.parallelism>>
     steps:
-    - run:
-        name: Install xsltproc
-        command: apt update -y && apt install -y xsltproc
-    - unity_test_base
-
-  macos-unity-test:
-    macos:
-      xcode: 11.3.0
-    environment:
-      XUNIT_UNITY_RUNNER: 0.5.0
-    parallelism: 3
-    steps:
-    - ulimit: { n: 10240 }
-    - unity_test_base:
-        runner_target: StandaloneOSX
-
-  windows-unity-test:
-    executor:
-      name: win/default
-      size: xlarge
-    environment:
-      XUNIT_UNITY_RUNNER: 0.5.0
-    parallelism: 4
-    steps:
-    - run:
-        name: Install bzip2 & xsltproc
-        command: choco install bzip2 xsltproc
-    - unity_test_base:
-        runner_target: StandaloneWindows64
+    - netcore_test_base: { code_coverage: false }
 
 workflows:
-  main:
+  Libplanet:
     jobs:
-    - linux-netcore-build
-    # Temporarily tunred off by excluding of linux-unity-test
-    #- linux-mono-build
+    - linux-netcore-build:
+        collect_tests_filter: "FullyQualifiedName!~Libplanet.Net.Tests & CircleCI!=Skip"
     - linux-netcore-test-netmq:
         requires: [linux-netcore-build]
     - linux-netcore-test-ar-SA:
+        filters:
+          branches:
+            only:
+              - main
         requires: [linux-netcore-build]
     - linux-netcore-test-fr-FR:
+        filters:
+          branches:
+            only:
+              - main
         requires: [linux-netcore-build]
     - macos-netcore-test:
+        filters:
+          branches:
+            only:
+              - main
         requires: [linux-netcore-build]
     - windows-netcore-test:
+        filters:
+          branches:
+            only:
+              - main
         requires: [linux-netcore-build]
-    # Temporarily tunred off due to error on xunity-unity-runner:
-    #- linux-unity-test:
-    #    requires: [linux-mono-build]
-    # Temporarily turned off due to CircleCI's slow worker node assignments of
-    # macOS and Windows VMs:
-    #- macos-unity-test:
-    #    requires: [linux-mono-build]
-    #- windows-unity-test:
-    #    requires: [linux-mono-build]
+  Libplanet.Net:
+    jobs:
+    - linux-netcore-build:
+        name: linux-netcore-build-net
+        collect_tests_filter: "FullyQualifiedName~Libplanet.Net.Tests"
+    - linux-netcore-test-netmq:
+        name: linux-netcore-test-netmq-net
+        requires: [linux-netcore-build-net]
+        parallelism: 1
+    - windows-netcore-test:
+        filters:
+          branches:
+            only:
+              - main
+        name: windows-netcore-test-net
+        requires: [linux-netcore-build-net]
+        parallelism: 1
+

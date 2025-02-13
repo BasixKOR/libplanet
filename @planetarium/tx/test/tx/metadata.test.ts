@@ -1,4 +1,5 @@
-import { encode } from "bencodex";
+import { inspect } from "node:util";
+import { encode } from "@planetarium/bencodex";
 import { expect, test } from "vitest";
 import { encodeTxMetadata } from "../../src/tx/metadata";
 import { key1 } from "./fixtures";
@@ -11,7 +12,9 @@ test("encodeTxMetadata", () => {
     timestamp: new Date("2022-05-23T01:02:00+00:00"),
     updatedAddresses: new Set(),
     genesisHash: null,
+    maxGasPrice: null,
+    gasLimit: null,
   });
-  expect(encoded).toMatchSnapshot();
+  expect(inspect(encoded, { compact: false })).toMatchSnapshot();
   expect(encode(encoded)).toMatchSnapshot();
 });
